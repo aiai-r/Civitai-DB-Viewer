@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}設定{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>設定</h2>
+  <form method="post" class="settings-form" id="settings-form">
+    <input type="hidden" name="return_view" value="settings">
+    <input type="hidden" name="return_browse" value="{{ return_browse }}">
+    <div class="field span-2">
+      <label for="api_key">APIキー</label>
+      <input id="api_key" name="api_key" value="{{ api_key }}" placeholder="Civitai API key">
+    </div>
+    <div class="field span-3 settings-section">
+      <strong>メディア設定</strong>
+    </div>
+    <div class="field span-2">
+      <div class="inline-checks">
+        <label>
+          <input id="nsfw_enabled" type="checkbox" name="nsfw_enabled" value="1" {% if ui_settings.nsfw_enabled %}checked{% endif %}>
+          NSFWを含める
+        </label>
+        <label>
+          <input type="checkbox" name="include_video" value="1" {% if ui_settings.include_video %}checked{% endif %}>
+          動画を含める
+        </label>
+      </div>
+      <p class="muted settings-help">OFF の場合は画像のみを対象にします。NSFW は 18歳未満は利用しないでください。</p>
+    </div>
+    <div class="field span-3">
+      <strong>モデル取得時</strong>
+    </div>
+    <div class="field">
+      <label>
+        <input type="checkbox" name="download_preview_enabled" value="1" {% if ui_settings.download_preview_enabled %}checked{% endif %}>
+        preview画像を保存する
+      </label>
+      <p class="muted settings-help">モデル本体と同名の `.preview.*` を保存します。</p>
+    </div>
+    <div class="field">
+      <label>
+        <input type="checkbox" name="download_civitai_info_enabled" value="1" {% if ui_settings.download_civitai_info_enabled %}checked{% endif %}>
+        Civitai情報を保存する
+      </label>
+      <p class="muted settings-help">トリガーワード等を含む `.civitai.info` を保存します。</p>
+    </div>
+    <div class="field span-3 settings-section">
+      <strong>キャッシュ設定</strong>
+      <p class="muted settings-help">一覧の再表示を速くするための一時保存です。</p>
+    </div>
+    <div class="field span-3">
+      <label>
+        <input type="checkbox" name="info_cache_enabled" value="1" {% if ui_settings.info_cache_enabled %}checked{% endif %}>
+        キャッシュを使う
+      </label>
+      <p class="muted settings-help">Civitai一覧の取得結果を一時保存します。</p>
+    </div>
+    <div class="field span-2">
+      <label for="info_cache_file">キャッシュ保存先</label>
+      <input id="info_cache_file" name="info_cache_file" value="{{ ui_settings.info_cache_file }}" placeholder="キャッシュファイル">
+    </div>
+    <div class="field cache-action">
+      <label>&nbsp;</label>
+      <button type="submit" name="settings_action" value="clear_info_cache" class="button secondary">キャッシュ削除</button>
+    </div>
+    <div class="field span-3 settings-section">
+      <strong>メンテナンス</strong>
+      <p class="muted settings-help">DB用ローカルメディア (`db_media`) を対象に再圧縮します。</p>
+    </div>
+    <div class="field span-3">
+      <strong>画像</strong>
+    </div>
+    <div class="field">
+      <label for="maintenance_image_format">拡張子</label>
+      <select id="maintenance_image_format" name="maintenance_image_format">
+        <option value="webp" {% if maintenance_settings.image_format == "webp" %}selected{% endif %}>webp</option>
+        <option value="jpg" {% if maintenance_settings.image_format == "jpg" %}selected{% endif %}>jpg</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="maintenance_image_quality">圧縮率</label>
+      <input id="maintenance_image_quality" name="maintenance_image_quality" type="number" min="1" max="100" value="{{ maintenance_settings.image_quality }}">
+    </div>
+    <div class="field">
+      <label>
+        <input type="checkbox" name="maintenance_image_keep_exif" value="1" {% if maintenance_settings.image_keep_exif %}checked{% endif %}>
+        Exif を保持する
+      </label>
+    </div>
+    <div class="field span-3">
+      <label>
+        <input type="checkbox" name="maintenance_image_skip_processed" value="1" {% if maintenance_settings.image_skip_processed %}checked{% endif %}>
+        処理済みはスキップ
+      </label>
+    </div>
+    <div class="field align-end span-3">
+      <label>&nbsp;</label>
+      <button type="submit" name="settings_action" value="run_image_maintenance" class="button secondary">画像メンテナンス実行</button>
+    </div>
+    <div class="field span-3">
+      <strong>動画</strong>
+      <p class="muted settings-help">動画処理には FFmpeg のインストールが必要です。</p>
+    </div>
+    <div class="maintenance-video-grid span-3">
+      <div class="field">
+        <label for="maintenance_video_format">出力形式</label>
+        <select id="maintenance_video_format" name="maintenance_video_format">
+          <option value="mp4" {% if maintenance_settings.video_format == "mp4" %}selected{% endif %}>mp4</option>
+          <option value="webm" {% if maintenance_settings.video_format == "webm" %}selected{% endif %}>webm</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="maintenance_video_quality">品質</label>
+        <select id="maintenance_video_quality" name="maintenance_video_quality">
+          <option value="high" {% if maintenance_settings.video_quality == "high" %}selected{% endif %}>高</option>
+          <option value="medium" {% if maintenance_settings.video_quality == "medium" %}selected{% endif %}>中</option>
+          <option value="low" {% if maintenance_settings.video_quality == "low" %}selected{% endif %}>低</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="maintenance_video_resolution">解像度</label>
+        <select id="maintenance_video_resolution" name="maintenance_video_resolution">
+          <option value="original" {% if maintenance_settings.video_resolution == "original" %}selected{% endif %}>元</option>
+          <option value="720" {% if maintenance_settings.video_resolution == "720" %}selected{% endif %}>720</option>
+          <option value="512" {% if maintenance_settings.video_resolution == "512" %}selected{% endif %}>512</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="maintenance_video_keep_audio">音声</label>
+        <select id="maintenance_video_keep_audio" name="maintenance_video_keep_audio">
+          <option value="1" {% if maintenance_settings.video_keep_audio %}selected{% endif %}>保持</option>
+          <option value="0" {% if not maintenance_settings.video_keep_audio %}selected{% endif %}>削除</option>
+        </select>
+      </div>
+    </div>
+    <div class="field span-3">
+      <label>
+        <input type="checkbox" name="maintenance_video_skip_processed" value="1" {% if maintenance_settings.video_skip_processed %}checked{% endif %}>
+        処理済みはスキップ
+      </label>
+    </div>
+    <div class="field align-end span-3">
+      <label>&nbsp;</label>
+      <button type="submit" name="settings_action" value="run_video_maintenance" class="button secondary">動画メンテナンス実行</button>
+    </div>
+    <div class="field span-3 settings-section">
+      <strong>Base models / Types</strong>
+      <p class="muted settings-help">現在の候補をそのまま編集して保存できます。大文字・小文字を含め、Civitai の表記をそのまま使ってください。</p>
+    </div>
+    <div class="manual-dropdown-grid span-3">
+      <div class="field">
+        <label for="manual_bases">Base models</label>
+        <textarea id="manual_bases" name="manual_bases" rows="8" placeholder="1行1件、またはカンマ区切りで入力">{{ dropdown_cache_text.bases }}</textarea>
+      </div>
+      <div class="field">
+        <label for="manual_types">Types</label>
+        <textarea id="manual_types" name="manual_types" rows="8" placeholder="1行1件、またはカンマ区切りで入力">{{ dropdown_cache_text.types }}</textarea>
+      </div>
+    </div>
+    <div class="field span-3 settings-section">
+      <strong>モデル保存先</strong>
+      <p class="muted settings-help">モデル本体を保存する場合だけ使う設定です。キャッシュとは別です。</p>
+    </div>
+    <div class="field span-2">
+      <label for="download_root_dir">モデル保存ルート</label>
+      <input id="download_root_dir" name="download_root_dir" value="{{ ui_settings.download_root_dir }}" placeholder="このrepo内のdownloadsフォルダを既定使用">
+    </div>
+    {% for item in model_type_downloads %}
+    <div class="field span-2">
+      <label for="{{ item.field_name }}">{{ item.type }}保存先</label>
+      <input id="{{ item.field_name }}" name="{{ item.field_name }}" value="{{ item.value }}" placeholder="{{ item.type }}保存先">
+    </div>
+    {% endfor %}
+  </form>
+</section>
+<div class="floating-actions">
+  <div class="floating-actions-meta">
+    <strong>設定保存</strong>
+    <span class="muted">変更内容を保存します</span>
+  </div>
+  <button type="submit" form="settings-form" name="settings_action" value="save">保存</button>
+</div>
+<script>
+  (() => {
+    const nsfw = document.getElementById("nsfw_enabled");
+    if (!nsfw) return;
+    nsfw.addEventListener("change", () => {
+      if (!nsfw.checked) return;
+      const ok = window.confirm("NSFWコンテンツを含めます。18歳未満は利用しないでください。取得・表示・保存は利用者自身の責任で判断してください。各国・地域の法令や利用環境に応じて適法性を確認してください。本アプリの作者は、取得・保存された内容について責任を負いません。");
+      if (!ok) {
+        nsfw.checked = false;
+      }
+    });
+  })();
+</script>
+{% endblock %}

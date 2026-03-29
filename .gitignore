@@ -1,0 +1,7 @@
+venv
+dist/
+outputs/
+__pycache__/
+cache/
+media_cache/
+ui_settings.json

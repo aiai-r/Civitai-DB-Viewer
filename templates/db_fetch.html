@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}DB一括取得{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h2>DB一括取得</h2>
+      <p class="muted">条件に合うモデルを DB へ保存します。</p>
+    </div>
+    <div class="actions">
+      <form method="post" action="{{ url_for('refresh_options') }}">
+        <input type="hidden" name="view_mode" value="bulk">
+        <button type="submit">モデルリスト更新</button>
+      </form>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('start_fetch') }}" class="fetch-form">
+    <input type="hidden" name="view_mode" value="bulk">
+    <div class="field">
+      <label for="fetch_selected_base">ベースモデル</label>
+      <input id="fetch_selected_base" name="fetch_selected_base" list="fetch-base-suggestions" value="{{ fetch_form.selected_base }}" placeholder="ベースモデルを入力">
+      <datalist id="fetch-base-suggestions">
+        {% for value in fetch_form.bases %}
+          <option value="{{ value }}"></option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="field">
+      <label for="fetch_selected_type">モデルタイプ</label>
+      <input id="fetch_selected_type" name="fetch_selected_type" list="fetch-type-suggestions" value="{{ fetch_form.selected_type }}" placeholder="モデルタイプを入力">
+      <datalist id="fetch-type-suggestions">
+        {% for value in fetch_form.types %}
+          <option value="{{ value }}"></option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="field">
+      <label for="fetch_period">Period</label>
+      <select id="fetch_period" name="fetch_period">
+        {% for value in period_options %}
+          <option value="{{ value }}" {% if value == fetch_form.period %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="fetch_sort">Sort</label>
+      <select id="fetch_sort" name="fetch_sort">
+        {% for value in sort_options %}
+          <option value="{{ value }}" {% if value == fetch_form.sort %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="fetch_mode">取得方式</label>
+      <select id="fetch_mode" name="fetch_mode">
+        {% for value, label in mode_options %}
+          <option value="{{ value }}" {% if value == fetch_form.mode %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="kw_mode">検索モード</label>
+      <select id="kw_mode" name="kw_mode">
+        <option value="Tag" {% if fetch_form.kw_mode == "Tag" %}selected{% endif %}>Tag</option>
+        <option value="Name" {% if fetch_form.kw_mode == "Name" %}selected{% endif %}>Name</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="fetch_keyword">取得キーワード</label>
+      <input id="fetch_keyword" name="fetch_keyword" value="{{ fetch_form.keyword }}" placeholder="タグまたは名前">
+    </div>
+    <div class="field">
+      <label for="fetch_start_page">開始ページ</label>
+      <input id="fetch_start_page" name="fetch_start_page" type="number" min="1" value="{{ fetch_form.start_page }}">
+    </div>
+    <div class="field">
+      <label for="fetch_limit">1ページ件数</label>
+      <input id="fetch_limit" name="fetch_limit" type="number" min="1" max="100" value="{{ fetch_form.limit }}">
+    </div>
+    <div class="field">
+      <label for="fetch_wait_time">待機(秒)</label>
+      <input id="fetch_wait_time" name="fetch_wait_time" type="number" min="0" step="0.5" value="{{ fetch_form.wait_time }}">
+    </div>
+    <div class="actions align-end span-full submit-row">
+      <button type="submit" name="fetch_submit" value="save">DBへ保存</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel" id="job-panel"{% if current_job %} data-job-id="{{ current_job.id }}" data-job-status="{{ current_job.status }}"{% endif %}>
+  <div class="panel-head">
+    <div>
+      <h2>進捗</h2>
+      <p class="muted" id="job-status-text">
+        {% if current_job %}
+          ジョブ {{ current_job.id }} / {{ current_job.status }}
+        {% else %}
+          ジョブ待機中
+        {% endif %}
+      </p>
+    </div>
+  </div>
+  <div class="log-box" id="job-log-box">
+    {% if current_job %}
+      {% for line in current_job.logs %}
+        <div>{{ line }}</div>
+      {% endfor %}
+      {% if current_job.error %}
+        <div class="error-text" id="job-error-text">{{ current_job.error }}</div>
+      {% endif %}
+    {% else %}
+      <div>ここに一括取得ジョブの進捗を表示します。</div>
+    {% endif %}
+  </div>
+</section>
+<script>
+  (() => {
+    const panel = document.getElementById("job-panel");
+    const jobId = panel ? panel.dataset.jobId : "";
+    if (!panel || !jobId) return;
+    const logBox = document.getElementById("job-log-box");
+    const statusText = document.getElementById("job-status-text");
+    let stopped = false;
+
+    const renderJob = (job) => {
+      statusText.textContent = `ジョブ ${job.id} / ${job.status}`;
+      const logs = Array.isArray(job.logs) ? job.logs : [];
+      const errorHtml = job.error ? `<div class="error-text" id="job-error-text">${job.error}</div>` : "";
+      logBox.innerHTML = logs.map((line) => `<div>${line}</div>`).join("") + errorHtml;
+      logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    const poll = async () => {
+      if (stopped) return;
+      try {
+        const resp = await fetch(`/jobs/${jobId}.json`, { cache: "no-store" });
+        if (!resp.ok) return;
+        const job = await resp.json();
+        renderJob(job);
+        if (job.status === "completed" || job.status === "failed") {
+          stopped = true;
+        }
+      } catch (_) {
+      }
+    };
+
+    if (panel.dataset.jobStatus === "queued" || panel.dataset.jobStatus === "running") {
+      logBox.scrollTop = logBox.scrollHeight;
+      const timer = setInterval(async () => {
+        await poll();
+        if (stopped) {
+          clearInterval(timer);
+        }
+      }, 1500);
+    }
+  })();
+</script>
+{% endblock %}

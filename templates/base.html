@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Civitai DB Viewer{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1><a href="{{ url_for('models') }}">Civitai DB Viewer</a></h1>
+      <p>SQLiteに保存したモデル情報をブラウザで確認します。</p>
+      <nav class="nav-links">
+        <a href="{{ url_for('models', view='browse') }}">Civitai</a>
+        <a href="{{ url_for('models', view='db') }}">DB</a>
+        <a href="{{ url_for('db_fetch') }}">DB一括取得</a>
+        <a href="{{ url_for('settings') }}">設定</a>
+        <form method="post" action="{{ url_for('app_restart') }}" class="inline-form">
+          <button type="submit" class="button secondary nav-button">GUI再起動</button>
+        </form>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

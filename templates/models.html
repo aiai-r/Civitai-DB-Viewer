@@ -1,0 +1,674 @@
+{% extends "base.html" %}
+{% block title %}モデル一覧{% endblock %}
+{% block content %}
+{% macro browse_sort_header(label, field, browse_uses_local_paging, tooltip_en="", tooltip_ja="") -%}
+  {% set sort_fields, sort_dirs = toggle_sort_values(field) %}
+  {% set sort_state = table_sort_map.get(field, "") %}
+  <span class="header-tooltip{% if tooltip_en or tooltip_ja %} has-tooltip{% endif %}">
+    <a class="sort-link js-preserve-scroll" href="{{ models_url(table_sort=sort_fields, table_dir=sort_dirs) }}">
+      <span class="sort-head">
+        <span>{{ label }}</span>
+        {% if sort_state %}
+          <span class="sort-arrow-single active">{{ "▲" if sort_state == "asc" else "▼" }}</span>
+        {% endif %}
+      </span>
+    </a>
+    {% if tooltip_en or tooltip_ja %}
+      <span class="header-tooltip-body" role="tooltip">
+        {% if tooltip_en %}<span class="tooltip-line">{{ label }}： {{ tooltip_en }}</span>{% endif %}
+        {% if tooltip_ja %}<span class="tooltip-line">{{ tooltip_ja }}</span>{% endif %}
+      </span>
+    {% endif %}
+  </span>
+{%- endmacro %}
+{% macro db_sort_header(label, field, tooltip_en="", tooltip_ja="") -%}
+  {% set sort_fields, sort_dirs = toggle_sort_values(field) %}
+  {% set sort_state = table_sort_map.get(field, "") %}
+  <span class="header-tooltip{% if tooltip_en or tooltip_ja %} has-tooltip{% endif %}">
+    <a class="sort-link js-preserve-scroll" href="{{ models_url(table_sort=sort_fields, table_dir=sort_dirs, page=1) }}">
+      <span class="sort-head">
+        <span>{{ label }}</span>
+        {% if sort_state %}
+          <span class="sort-arrow-single active">{{ "▲" if sort_state == "asc" else "▼" }}</span>
+        {% endif %}
+      </span>
+    </a>
+    {% if tooltip_en or tooltip_ja %}
+      <span class="header-tooltip-body" role="tooltip">
+        {% if tooltip_en %}<span class="tooltip-line">{{ label }}： {{ tooltip_en }}</span>{% endif %}
+        {% if tooltip_ja %}<span class="tooltip-line">{{ tooltip_ja }}</span>{% endif %}
+      </span>
+    {% endif %}
+  </span>
+{%- endmacro %}
+
+{% if view_mode == "browse" %}
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h2>Civitai表示</h2>
+      <p class="muted">API結果をその場で表示します。</p>
+    </div>
+    <div class="actions">
+      <form method="post" action="{{ url_for('refresh_options') }}">
+        <input type="hidden" name="view_mode" value="browse">
+        <button type="submit">モデルリスト更新</button>
+      </form>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('start_fetch') }}" class="fetch-form">
+    <input type="hidden" name="view_mode" value="browse">
+    <div class="field">
+      <label for="fetch_selected_base">ベースモデル</label>
+      <input id="fetch_selected_base" name="fetch_selected_base" list="fetch-base-suggestions" value="{{ fetch_form.selected_base }}" placeholder="ベースモデルを入力">
+      <datalist id="fetch-base-suggestions">
+        {% for value in fetch_form.bases %}
+          <option value="{{ value }}"></option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="field">
+      <label for="fetch_selected_type">モデルタイプ</label>
+      <input id="fetch_selected_type" name="fetch_selected_type" list="fetch-type-suggestions" value="{{ fetch_form.selected_type }}" placeholder="モデルタイプを入力">
+      <datalist id="fetch-type-suggestions">
+        {% for value in fetch_form.types %}
+          <option value="{{ value }}"></option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="field">
+      <label for="fetch_period">Period</label>
+      <select id="fetch_period" name="fetch_period">
+        {% for value in period_options %}
+          <option value="{{ value }}" {% if value == fetch_form.period %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="fetch_sort">Sort</label>
+      <select id="fetch_sort" name="fetch_sort">
+        {% for value in sort_options %}
+          <option value="{{ value }}" {% if value == fetch_form.sort %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="fetch_mode">取得方式</label>
+      <select id="fetch_mode" name="fetch_mode">
+        {% for value, label in mode_options %}
+          <option value="{{ value }}" {% if value == fetch_form.mode %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="kw_mode">検索モード</label>
+      <select id="kw_mode" name="kw_mode">
+        <option value="Tag" {% if fetch_form.kw_mode == "Tag" %}selected{% endif %}>Tag</option>
+        <option value="Name" {% if fetch_form.kw_mode == "Name" %}selected{% endif %}>Name</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="fetch_keyword">取得キーワード</label>
+      <input id="fetch_keyword" name="fetch_keyword" value="{{ fetch_form.keyword }}" placeholder="タグまたは名前">
+    </div>
+    <div class="field">
+      <label for="fetch_start_page">開始ページ</label>
+      <input id="fetch_start_page" name="fetch_start_page" type="number" min="1" value="{{ fetch_form.start_page }}">
+    </div>
+    <div class="field">
+      <label for="fetch_limit">1ページ件数</label>
+      <input id="fetch_limit" name="fetch_limit" type="number" min="1" max="100" value="{{ fetch_form.limit }}">
+    </div>
+    <div class="field">
+      <label for="fetch_wait_time">待機(秒)</label>
+      <input id="fetch_wait_time" name="fetch_wait_time" type="number" min="0" step="0.5" value="{{ fetch_form.wait_time }}">
+    </div>
+    <div class="actions align-end span-full submit-row">
+      <button type="submit" name="fetch_submit" value="display">表示</button>
+    </div>
+  </form>
+  <div class="inline-log-box" id="job-panel"{% if current_job %} data-job-id="{{ current_job.id }}" data-job-status="{{ current_job.status }}"{% endif %}>
+    <div class="log-box compact-log" id="job-log-box">
+      {% if current_job -%}
+        {%- for line in current_job.logs %}
+      <div>{{ line }}</div>
+        {%- endfor %}
+        {%- if current_job.error %}
+      <div class="error-text" id="job-error-text">{{ current_job.error }}</div>
+        {%- endif %}
+      {%- else %}
+      <div class="muted">ログはここに表示されます。</div>
+      {%- endif %}
+    </div>
+  </div>
+</section>
+
+{% if browse_result %}
+<section class="panel" id="browse-results-panel" data-sort-panel="browse">
+  {% set browse_page = browse_result["meta"].get("page", fetch_form.start_page) %}
+  {% set browse_has_next = browse_result["meta"].get("has_next", false) %}
+  {% set browse_uses_local_paging = browse_result["meta"].get("uses_local_paging", false) %}
+  {% set loop_page = browse_result["meta"].get("local_page", 1) %}
+  {% set loop_total_pages = browse_result["meta"].get("local_total_pages", 1) %}
+  <div class="panel-head">
+    <div>
+      <h2>Civitai表示結果</h2>
+      <p class="muted">{{ browse_result["items"]|length }} 件。必要なものだけ保存・ダウンロードできます。</p>
+    </div>
+  </div>
+  {% if not browse_uses_local_paging %}
+  <div class="pager">
+    {% if browse_page > 1 %}
+      <form method="post" action="{{ url_for('browse_page') }}">
+        <input type="hidden" name="browse_id" value="{{ browse_result.id }}">
+        <input type="hidden" name="direction" value="prev">
+        <button type="submit" class="button secondary">前へ</button>
+      </form>
+    {% endif %}
+    <span>Page {{ browse_page }}</span>
+    {% if browse_has_next %}
+      <form method="post" action="{{ url_for('browse_page') }}">
+        <input type="hidden" name="browse_id" value="{{ browse_result.id }}">
+        <input type="hidden" name="direction" value="next">
+        <button type="submit" class="button secondary">次へ</button>
+      </form>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if browse_uses_local_paging and loop_total_pages > 1 %}
+  <div class="pager">
+    {% if loop_page > 1 %}
+      <a class="button secondary" href="{{ models_url(browse_local_page=loop_page - 1) }}">前へ</a>
+    {% endif %}
+    <span>Page {{ loop_page }} / {{ loop_total_pages }}</span>
+    {% if loop_page < loop_total_pages %}
+      <a class="button secondary" href="{{ models_url(browse_local_page=loop_page + 1) }}">次へ</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('save_selected_from_browse') }}" id="browse-selection-form">
+    <input type="hidden" name="browse_id" value="{{ browse_result.id }}">
+    <div class="table-wrap no-scroll">
+      <table class="fit-table">
+        <colgroup>
+          <col class="col-check">
+          <col class="col-thumb">
+          <col class="col-name">
+          <col class="col-type">
+          <col class="col-base">
+          <col class="col-link">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-action">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>
+              <label class="check-all-label">
+                <input type="checkbox" id="browse-check-all">
+                <span>全選択</span>
+              </label>
+            </th>
+            <th>サムネ</th>
+            <th>{{ browse_sort_header("モデル名", "name", browse_uses_local_paging) }}</th>
+            <th>{{ browse_sort_header("タイプ", "model_type", browse_uses_local_paging) }}</th>
+            <th>{{ browse_sort_header("ベース", "base_model", browse_uses_local_paging) }}</th>
+            <th>{{ browse_sort_header("URL", "model_url", browse_uses_local_paging) }}</th>
+            <th>{{ browse_sort_header("クレジット", "allow_no_credit", browse_uses_local_paging, "Use the model without crediting the creator", "作者の名前を表記せず使用できるか") }}</th>
+            <th>{{ browse_sort_header("画像販売", "allow_sell_images", browse_uses_local_paging, "Sell images they generate", "出力画像を商用利用できるか") }}</th>
+            <th>{{ browse_sort_header("有料利用", "allow_run_paid_service", browse_uses_local_paging, "Run on services that generate for money", "このモデルを使用した有料サービスを運営できるか") }}</th>
+            <th>{{ browse_sort_header("マージ", "allow_share_merges", browse_uses_local_paging, "Share merges using this model", "マージモデルを共有できるか") }}</th>
+            <th>{{ browse_sort_header("モデル販売", "allow_sell_model", browse_uses_local_paging, "Sell this model or merges using this model", "モデルそのものを販売できるか") }}</th>
+            <th>{{ browse_sort_header("別ライセンス", "allow_different_licenses", browse_uses_local_paging, "Have different permissions when sharing merges", "マージモデル共有時に別のラインセンスを付与できるか") }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in browse_result["items"] %}
+            <tr>
+              <td><input type="checkbox" name="selected_indexes" value="{{ item.browse_index }}"></td>
+              <td>
+                {% if item.display_media_url %}
+                  {% if item.is_video %}
+                    <button type="button" class="media-thumb-button" data-media-type="video" data-media-src="{{ item.full_media_url }}" aria-label="動画を拡大表示">
+                      <video class="thumb thumb-video zoomable-media{% if item.poster_only %} thumb-video-poster{% endif %}" src="{{ item.display_media_url }}" {% if not item.poster_only %}autoplay loop{% endif %} muted playsinline preload="metadata"></video>
+                    </button>
+                  {% else %}
+                    <button type="button" class="media-thumb-button" data-media-type="image" data-media-src="{{ item.full_media_url }}" aria-label="画像を拡大表示">
+                      <img class="thumb zoomable-media" src="{{ item.display_media_url }}" alt="" loading="lazy" decoding="async">
+                    </button>
+                  {% endif %}
+                {% else %}
+                  <span class="muted">なし</span>
+                {% endif %}
+              </td>
+              <td class="name-cell">{{ item.name }}</td>
+              <td>{{ item.model_type or "-" }}</td>
+              <td>{{ item.base_model or "-" }}</td>
+              <td><a href="{{ item.model_url }}" target="_blank" rel="noreferrer">開く</a></td>
+              <td>{{ "可" if item.allow_no_credit else "不可" }}</td>
+              <td>{{ "可" if item.allow_sell_images else "不可" }}</td>
+              <td>{{ "可" if item.allow_run_paid_service else "不可" }}</td>
+              <td>{{ "可" if item.allow_share_merges else "不可" }}</td>
+              <td>{{ "可" if item.allow_sell_model else "不可" }}</td>
+              <td>{{ "可" if item.allow_different_licenses else "不可" }}</td>
+              <td>
+                <div class="cell-actions">
+                  <button type="submit" class="button small" formaction="{{ url_for('save_one_from_browse') }}" name="browse_index" value="{{ item.browse_index }}">保存</button>
+                  <button type="submit" class="button small" formaction="{{ url_for('download_one_from_browse') }}" name="browse_index" value="{{ item.browse_index }}">DL</button>
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="13" class="muted center">表示結果がありません。</td>
+            </tr>
+          {% endfor %}
+      </tbody>
+      </table>
+    </div>
+  </form>
+  {% if not browse_uses_local_paging %}
+  <div class="pager top-gap">
+    {% if browse_page > 1 %}
+      <form method="post" action="{{ url_for('browse_page') }}">
+        <input type="hidden" name="browse_id" value="{{ browse_result.id }}">
+        <input type="hidden" name="direction" value="prev">
+        <button type="submit" class="button secondary">前へ</button>
+      </form>
+    {% endif %}
+    <span>Page {{ browse_page }}</span>
+    {% if browse_has_next %}
+      <form method="post" action="{{ url_for('browse_page') }}">
+        <input type="hidden" name="browse_id" value="{{ browse_result.id }}">
+        <input type="hidden" name="direction" value="next">
+        <button type="submit" class="button secondary">次へ</button>
+      </form>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if browse_uses_local_paging and loop_total_pages > 1 %}
+  <div class="pager top-gap">
+    {% if loop_page > 1 %}
+      <a class="button secondary" href="{{ models_url(browse_local_page=loop_page - 1) }}">前へ</a>
+    {% endif %}
+    <span>Page {{ loop_page }} / {{ loop_total_pages }}</span>
+    {% if loop_page < loop_total_pages %}
+      <a class="button secondary" href="{{ models_url(browse_local_page=loop_page + 1) }}">次へ</a>
+    {% endif %}
+  </div>
+  {% endif %}
+    <div class="floating-actions">
+      <div class="floating-actions-meta">
+        <strong>選択操作</strong>
+        <span class="muted" id="browse-selected-count">0件選択中</span>
+      </div>
+      <button type="submit" form="browse-selection-form">選択保存</button>
+      <button type="submit" form="browse-selection-form" formaction="{{ url_for('download_selected_from_browse') }}">選択DL</button>
+    </div>
+</section>
+{% endif %}
+{% endif %}
+
+{% if view_mode == "db" %}
+<section class="panel">
+  <div class="panel-head">
+    <div>
+      <h2>DB表示</h2>
+      <p class="muted">保存済みモデルの早見表です。</p>
+    </div>
+  </div>
+  <form method="get" class="filters db-filters">
+    <input type="hidden" name="view" value="db">
+    <div class="field">
+      <label for="base_model">ベースモデル</label>
+      <select id="base_model" name="base_model">
+        <option value="">すべて</option>
+        {% for value in filters.base_models %}
+          <option value="{{ value }}" {% if value == base_model %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="model_type">モデルタイプ</label>
+      <select id="model_type" name="model_type">
+        <option value="">すべて</option>
+        {% for value in filters.model_types %}
+          <option value="{{ value }}" {% if value == model_type %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="db_per_page">1ページ件数</label>
+      <input id="db_per_page" name="db_per_page" type="number" min="1" max="200" value="{{ db_per_page }}">
+    </div>
+    <div class="field">
+      <label for="q">検索</label>
+      <input id="q" name="q" value="{{ keyword }}" placeholder="名前 or モデルID">
+    </div>
+    <div class="field align-end span-2">
+      <label>&nbsp;</label>
+      <button type="submit">絞り込み</button>
+    </div>
+    <div class="field align-end span-2">
+      <label>&nbsp;</label>
+      <a class="button secondary" href="{{ url_for('models', view='db') }}">リセット</a>
+    </div>
+  </form>
+  <div id="db-results-panel" data-sort-panel="db">
+    <div class="summary">
+      <strong>{{ result.total }}</strong> 件
+    </div>
+    <div class="pager top-gap">
+      {% if result.page > 1 %}
+        <a class="button secondary" href="{{ models_url(page=result.page - 1) }}">前へ</a>
+      {% endif %}
+      <span>{{ result.page }} / {{ result.pages }}</span>
+      {% if result.page < result.pages %}
+        <a class="button secondary" href="{{ models_url(page=result.page + 1) }}">次へ</a>
+      {% endif %}
+    </div>
+    <div class="table-wrap no-scroll">
+      <table class="fit-table">
+        <colgroup>
+          <col class="col-thumb">
+          <col class="col-name">
+          <col class="col-type">
+          <col class="col-base">
+          <col class="col-link">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-license">
+          <col class="col-action">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>サムネ</th>
+            <th>{{ db_sort_header("モデル名", "name") }}</th>
+            <th>{{ db_sort_header("タイプ", "model_type") }}</th>
+            <th>{{ db_sort_header("ベース", "base_model") }}</th>
+            <th>{{ db_sort_header("URL", "model_url") }}</th>
+            <th>{{ db_sort_header("クレジット", "allow_no_credit", "Use the model without crediting the creator", "作者の名前を表記せず使用できるか") }}</th>
+            <th>{{ db_sort_header("画像販売", "allow_sell_images", "Sell images they generate", "出力画像を商用利用できるか") }}</th>
+            <th>{{ db_sort_header("有料利用", "allow_run_paid_service", "Run on services that generate for money", "このモデルを使用した有料サービスを運営できるか") }}</th>
+            <th>{{ db_sort_header("マージ", "allow_share_merges", "Share merges using this model", "マージモデルを共有できるか") }}</th>
+            <th>{{ db_sort_header("モデル販売", "allow_sell_model", "Sell this model or merges using this model", "モデルそのものを販売できるか") }}</th>
+            <th>{{ db_sort_header("別ライセンス", "allow_different_licenses", "Have different permissions when sharing merges", "マージモデル共有時に別のラインセンスを付与できるか") }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in result["items"] %}
+            <tr>
+              <td>
+                {% if item.display_media_url %}
+                  {% if item.is_video %}
+                    <button type="button" class="media-thumb-button" data-media-type="video" data-media-src="{{ item.full_media_url }}" aria-label="動画を拡大表示">
+                      <video class="thumb thumb-video zoomable-media{% if item.poster_only %} thumb-video-poster{% endif %}" src="{{ item.display_media_url }}" {% if not item.poster_only %}autoplay loop{% endif %} muted playsinline preload="metadata"></video>
+                    </button>
+                  {% else %}
+                    <button type="button" class="media-thumb-button" data-media-type="image" data-media-src="{{ item.full_media_url }}" aria-label="画像を拡大表示">
+                      <img class="thumb zoomable-media" src="{{ item.display_media_url }}" alt="" loading="lazy" decoding="async">
+                    </button>
+                  {% endif %}
+                {% else %}
+                  <span class="muted">なし</span>
+                {% endif %}
+              </td>
+              <td class="name-cell">{{ item.name }}</td>
+              <td>{{ item.model_type or "-" }}</td>
+              <td>{{ item.base_model or "-" }}</td>
+              <td><a href="{{ item.model_url }}" target="_blank" rel="noreferrer">開く</a></td>
+              <td>{{ "可" if item.allow_no_credit else "不可" }}</td>
+              <td>{{ "可" if item.allow_sell_images else "不可" }}</td>
+              <td>{{ "可" if item.allow_run_paid_service else "不可" }}</td>
+              <td>{{ "可" if item.allow_share_merges else "不可" }}</td>
+              <td>{{ "可" if item.allow_sell_model else "不可" }}</td>
+              <td>{{ "可" if item.allow_different_licenses else "不可" }}</td>
+              <td>
+                <form method="post" action="{{ url_for('refresh_model', row_id=item.id) }}">
+                  <input type="hidden" name="q" value="{{ keyword }}">
+                  <input type="hidden" name="model_type" value="{{ model_type }}">
+                  <input type="hidden" name="base_model" value="{{ base_model }}">
+                  <input type="hidden" name="db_per_page" value="{{ db_per_page }}">
+                  <input type="hidden" name="page" value="{{ result.page }}">
+                  <input type="hidden" name="table_sort" value="{{ table_sort_fields_param }}">
+                  <input type="hidden" name="table_dir" value="{{ table_sort_dirs_param }}">
+                  <button type="submit" class="button small">更新</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="12" class="muted center">該当データがありません。</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      {% if result.page > 1 %}
+        <a class="button secondary" href="{{ models_url(page=result.page - 1) }}">前へ</a>
+      {% endif %}
+      <span>{{ result.page }} / {{ result.pages }}</span>
+      {% if result.page < result.pages %}
+        <a class="button secondary" href="{{ models_url(page=result.page + 1) }}">次へ</a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<div class="media-modal" id="media-modal" hidden>
+  <button type="button" class="media-modal-backdrop" id="media-modal-backdrop" aria-label="閉じる"></button>
+  <div class="media-modal-content">
+    <button type="button" class="media-modal-close" id="media-modal-close" aria-label="閉じる">×</button>
+    <img id="media-modal-image" class="media-modal-image" alt="" hidden>
+    <video id="media-modal-video" class="media-modal-video" controls autoplay loop muted playsinline hidden></video>
+  </div>
+</div>
+<script>
+  (() => {
+    const initBrowseSelection = (root = document) => {
+      const checkAll = root.querySelector("#browse-check-all");
+      const selectedCount = root.querySelector("#browse-selected-count");
+      if (!checkAll || !selectedCount) return;
+      const itemChecks = Array.from(root.querySelectorAll('input[name="selected_indexes"]'));
+      const syncCount = () => {
+        const checked = itemChecks.filter((el) => el.checked).length;
+        selectedCount.textContent = `${checked}件選択中`;
+        if (itemChecks.length > 0) {
+          checkAll.checked = checked === itemChecks.length;
+          checkAll.indeterminate = checked > 0 && checked < itemChecks.length;
+        } else {
+          checkAll.checked = false;
+          checkAll.indeterminate = false;
+        }
+      };
+      checkAll.addEventListener("change", () => {
+        itemChecks.forEach((el) => {
+          el.checked = checkAll.checked;
+        });
+        syncCount();
+      });
+      itemChecks.forEach((el) => el.addEventListener("change", syncCount));
+      syncCount();
+    };
+
+    const replaceSortedPanel = async (link) => {
+      const currentPanel = link.closest("[data-sort-panel]");
+      if (!currentPanel) {
+        window.location.href = link.href;
+        return;
+      }
+
+      const targetId = currentPanel.id;
+      const panelTop = currentPanel.getBoundingClientRect().top;
+
+      try {
+        const resp = await fetch(link.href, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+        const html = await resp.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const nextPanel = doc.getElementById(targetId);
+        if (!nextPanel) {
+          throw new Error("panel not found");
+        }
+        currentPanel.replaceWith(nextPanel);
+        const replacedPanel = document.getElementById(targetId);
+        if (replacedPanel) {
+          const nextPanelTop = replacedPanel.getBoundingClientRect().top;
+          window.scrollBy({ top: nextPanelTop - panelTop, left: 0, behavior: "auto" });
+          initBrowseSelection(replacedPanel);
+        }
+        history.pushState({ url: link.href }, "", link.href);
+      } catch (_) {
+        window.location.href = link.href;
+      }
+    };
+
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest(".js-preserve-scroll");
+      if (!link) return;
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      replaceSortedPanel(link);
+    });
+
+    window.addEventListener("popstate", () => {
+      window.location.reload();
+    });
+
+    initBrowseSelection();
+  })();
+
+  (() => {
+    const modal = document.getElementById("media-modal");
+    const backdrop = document.getElementById("media-modal-backdrop");
+    const content = modal ? modal.querySelector(".media-modal-content") : null;
+    const closeButton = document.getElementById("media-modal-close");
+    const image = document.getElementById("media-modal-image");
+    const video = document.getElementById("media-modal-video");
+    if (!modal || !backdrop || !content || !closeButton || !image || !video) return;
+
+    const closeModal = () => {
+      modal.hidden = true;
+      image.hidden = true;
+      image.removeAttribute("src");
+      video.hidden = true;
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      document.body.classList.remove("modal-open");
+    };
+
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest(".media-thumb-button");
+      if (!button) return;
+      const mediaType = button.dataset.mediaType || "image";
+      const mediaSrc = button.dataset.mediaSrc || "";
+      if (!mediaSrc) return;
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
+      if (mediaType === "video") {
+        image.hidden = true;
+        image.removeAttribute("src");
+        video.hidden = false;
+        video.src = mediaSrc;
+        video.load();
+        video.play().catch(() => {});
+        return;
+      }
+      video.hidden = true;
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      image.hidden = false;
+      image.src = mediaSrc;
+    });
+
+    backdrop.addEventListener("click", closeModal);
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal || event.target === content) {
+        closeModal();
+      }
+    });
+    closeButton.addEventListener("click", closeModal);
+    image.addEventListener("click", closeModal);
+    video.addEventListener("click", closeModal);
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modal.hidden) {
+        closeModal();
+      }
+    });
+  })();
+
+  (() => {
+    const panel = document.getElementById("job-panel");
+    if (!panel) return;
+    const jobId = panel.dataset.jobId;
+    const logBox = document.getElementById("job-log-box");
+    let stopped = false;
+
+    const renderJob = (job) => {
+      const logs = Array.isArray(job.logs) ? job.logs : [];
+      const errorHtml = job.error ? `<div class="error-text" id="job-error-text">${job.error}</div>` : "";
+      logBox.innerHTML = logs.map((line) => `<div>${line}</div>`).join("") + errorHtml;
+      logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    const nextUrlWithBrowse = (browseId) => {
+      const url = new URL(window.location.href);
+      url.searchParams.set("view", "browse");
+      url.searchParams.set("browse", browseId);
+      url.searchParams.set("job", jobId);
+      return url.toString();
+    };
+
+    const poll = async () => {
+      if (stopped) return;
+      try {
+        const resp = await fetch(`/jobs/${jobId}.json`, { cache: "no-store" });
+        if (!resp.ok) return;
+        const job = await resp.json();
+        renderJob(job);
+        if (job.status === "completed" || job.status === "failed") {
+          stopped = true;
+          if (job.result && job.result.browse_id) {
+            window.location.replace(nextUrlWithBrowse(job.result.browse_id));
+          }
+        }
+      } catch (_) {
+      }
+    };
+
+    if (panel.dataset.jobStatus === "queued" || panel.dataset.jobStatus === "running") {
+      logBox.scrollTop = logBox.scrollHeight;
+      const timer = setInterval(async () => {
+        await poll();
+        if (stopped) {
+          clearInterval(timer);
+        }
+      }, 1500);
+    }
+  })();
+</script>
+{% endblock %}

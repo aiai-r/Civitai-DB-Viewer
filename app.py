@@ -1114,6 +1114,22 @@ def _browse_models_from_request() -> tuple[str, list[dict]]:
     if not browse_result:
         abort(404)
 
+    selected_model_ids = [str(value).strip() for value in request.form.getlist("selected_model_ids") if str(value).strip()]
+    if selected_model_ids:
+        model_map = {}
+        for model in (browse_result.get("raw_items") or browse_result.get("items", [])):
+            model_id = str(model.get("id") or "").strip()
+            if model_id and model_id not in model_map:
+                model_map[model_id] = model
+        page_cache = (browse_result.get("meta") or {}).get("page_cache") or {}
+        for cached in page_cache.values():
+            for model in (cached.get("items") or []):
+                model_id = str(model.get("id") or "").strip()
+                if model_id and model_id not in model_map:
+                    model_map[model_id] = model
+        models = [model_map[model_id] for model_id in selected_model_ids if model_id in model_map]
+        return browse_id, models
+
     selected = request.form.getlist("selected_indexes")
     indexes = []
     for value in selected:
@@ -1224,6 +1240,7 @@ def _models_context() -> dict:
             item["browse_index"] = index
             item["browse_id"] = browse_result["id"]
             item["source"] = "browse"
+            item["selection_model_id"] = str(model.get("id") or item.get("civitai_model_id") or item.get("id") or "").strip()
             browse_items.append(_decorate_media_item(item, ui_settings))
         browse_view = dict(browse_result)
         browse_view["items"] = browse_items

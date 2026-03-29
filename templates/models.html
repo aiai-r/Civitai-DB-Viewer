@@ -189,6 +189,7 @@
   {% endif %}
   <form method="post" action="{{ url_for('save_selected_from_browse') }}" id="browse-selection-form">
     <input type="hidden" name="browse_id" value="{{ browse_result.id }}">
+    <div id="browse-selection-hidden-fields"></div>
     <div class="table-wrap no-scroll">
       <table class="fit-table">
         <colgroup>
@@ -231,7 +232,7 @@
         <tbody>
           {% for item in browse_result["items"] %}
             <tr>
-              <td><input type="checkbox" name="selected_indexes" value="{{ item.browse_index }}"></td>
+              <td><input type="checkbox" name="selected_indexes" value="{{ item.browse_index }}" data-model-id="{{ item.selection_model_id }}"></td>
               <td>
                 {% if item.display_media_url %}
                   {% if item.is_video %}
@@ -478,13 +479,49 @@
 <script>
   (() => {
     const initBrowseSelection = (root = document) => {
+      const form = root.querySelector("#browse-selection-form");
       const checkAll = root.querySelector("#browse-check-all");
       const selectedCount = root.querySelector("#browse-selected-count");
-      if (!checkAll || !selectedCount) return;
-      const itemChecks = Array.from(root.querySelectorAll('input[name="selected_indexes"]'));
+      const hiddenFields = root.querySelector("#browse-selection-hidden-fields");
+      if (!form || !checkAll || !selectedCount || !hiddenFields) return;
+      const browseIdInput = form.querySelector('input[name="browse_id"]');
+      const browseId = (browseIdInput ? browseIdInput.value : "").trim();
+      if (!browseId) return;
+      const storageKey = `browse-selection:${browseId}`;
+      const itemChecks = Array.from(root.querySelectorAll('input[name="selected_indexes"][data-model-id]'));
+      const loadSelectedIds = () => {
+        try {
+          const raw = window.sessionStorage.getItem(storageKey);
+          const parsed = raw ? JSON.parse(raw) : [];
+          return new Set(Array.isArray(parsed) ? parsed.map((value) => String(value).trim()).filter(Boolean) : []);
+        } catch (_) {
+          return new Set();
+        }
+      };
+      const saveSelectedIds = (selectedIds) => {
+        try {
+          window.sessionStorage.setItem(storageKey, JSON.stringify(Array.from(selectedIds)));
+        } catch (_) {
+        }
+      };
+      const syncHiddenFields = (selectedIds) => {
+        hiddenFields.innerHTML = "";
+        Array.from(selectedIds).sort().forEach((modelId) => {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = "selected_model_ids";
+          input.value = modelId;
+          hiddenFields.appendChild(input);
+        });
+      };
+      const selectedIds = loadSelectedIds();
+      itemChecks.forEach((el) => {
+        const modelId = String(el.dataset.modelId || "").trim();
+        el.checked = Boolean(modelId) && selectedIds.has(modelId);
+      });
       const syncCount = () => {
         const checked = itemChecks.filter((el) => el.checked).length;
-        selectedCount.textContent = `${checked}件選択中`;
+        selectedCount.textContent = `${selectedIds.size}件選択中`;
         if (itemChecks.length > 0) {
           checkAll.checked = checked === itemChecks.length;
           checkAll.indeterminate = checked > 0 && checked < itemChecks.length;
@@ -492,14 +529,35 @@
           checkAll.checked = false;
           checkAll.indeterminate = false;
         }
+        syncHiddenFields(selectedIds);
+        saveSelectedIds(selectedIds);
       };
       checkAll.addEventListener("change", () => {
         itemChecks.forEach((el) => {
+          const modelId = String(el.dataset.modelId || "").trim();
           el.checked = checkAll.checked;
+          if (!modelId) return;
+          if (checkAll.checked) {
+            selectedIds.add(modelId);
+          } else {
+            selectedIds.delete(modelId);
+          }
         });
         syncCount();
       });
-      itemChecks.forEach((el) => el.addEventListener("change", syncCount));
+      itemChecks.forEach((el) => el.addEventListener("change", () => {
+        const modelId = String(el.dataset.modelId || "").trim();
+        if (!modelId) return;
+        if (el.checked) {
+          selectedIds.add(modelId);
+        } else {
+          selectedIds.delete(modelId);
+        }
+        syncCount();
+      }));
+      form.addEventListener("submit", () => {
+        syncHiddenFields(selectedIds);
+      });
       syncCount();
     };
 

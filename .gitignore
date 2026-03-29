@@ -5,3 +5,7 @@ __pycache__/
 cache/
 media_cache/
 ui_settings.json
+api_config.json
+civitai_models.db
+db_media/
+downloads/

@@ -260,8 +260,8 @@
               <td>{{ "可" if item.allow_different_licenses else "不可" }}</td>
               <td>
                 <div class="cell-actions">
-                  <button type="submit" class="button small" formaction="{{ url_for('save_one_from_browse') }}" name="browse_index" value="{{ item.browse_index }}">保存</button>
-                  <button type="submit" class="button small" formaction="{{ url_for('download_one_from_browse') }}" name="browse_index" value="{{ item.browse_index }}">DL</button>
+                  <button type="submit" class="button small" formaction="{{ url_for('save_one_from_browse') }}" name="browse_model_id" value="{{ item.selection_model_id }}">保存</button>
+                  <button type="submit" class="button small" formaction="{{ url_for('download_one_from_browse') }}" name="browse_model_id" value="{{ item.selection_model_id }}">DL</button>
                 </div>
               </td>
             </tr>

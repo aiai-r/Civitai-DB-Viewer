@@ -1143,6 +1143,21 @@ def _browse_models_from_request() -> tuple[str, list[dict]]:
     return browse_id, models
 
 
+def _find_browse_model_by_id(browse_result: dict, model_id: str) -> dict | None:
+    target_id = str(model_id or "").strip()
+    if not target_id:
+        return None
+    for model in (browse_result.get("raw_items") or browse_result.get("items", [])):
+        if str(model.get("id") or model.get("civitai_model_id") or "").strip() == target_id:
+            return model
+    page_cache = (browse_result.get("meta") or {}).get("page_cache") or {}
+    for cached in page_cache.values():
+        for model in (cached.get("items") or []):
+            if str(model.get("id") or model.get("civitai_model_id") or "").strip() == target_id:
+                return model
+    return None
+
+
 def _models_context() -> dict:
     db_path = _ensure_main_db()
     view_mode = request.args.get("view", session.get("last_view_mode", "browse")).strip() or "browse"
@@ -1727,13 +1742,18 @@ def refresh_model(row_id: int):
 def save_one_from_browse():
     browse_id = request.form.get("browse_id", "").strip()
     browse_index = request.form.get("browse_index", type=int)
+    browse_model_id = request.form.get("browse_model_id", "").strip()
     browse_result = _get_browse_result(browse_id)
-    if not browse_result or browse_index is None:
+    if not browse_result:
         abort(404)
-    items = browse_result["items"]
-    if browse_index < 0 or browse_index >= len(items):
-        abort(404)
-    model = items[browse_index]
+    model = _find_browse_model_by_id(browse_result, browse_model_id)
+    if not model:
+        if browse_index is None:
+            abort(404)
+        items = browse_result["items"]
+        if browse_index < 0 or browse_index >= len(items):
+            abort(404)
+        model = items[browse_index]
     db_path = _ensure_main_db()
     include_video = _load_ui_settings().get("include_video", True)
     save_models(db_path, [model], include_video=include_video)
@@ -1761,12 +1781,18 @@ def download_one_from_browse():
     api_key = load_api_key(APP_DIR)
     browse_id = request.form.get("browse_id", "").strip()
     browse_index = request.form.get("browse_index", type=int)
+    browse_model_id = request.form.get("browse_model_id", "").strip()
     browse_result = _get_browse_result(browse_id)
-    if not browse_result or browse_index is None:
+    if not browse_result:
         abort(404)
-    items = browse_result["items"]
-    if browse_index < 0 or browse_index >= len(items):
-        abort(404)
+    model = _find_browse_model_by_id(browse_result, browse_model_id)
+    if not model:
+        if browse_index is None:
+            abort(404)
+        items = browse_result["items"]
+        if browse_index < 0 or browse_index >= len(items):
+            abort(404)
+        model = items[browse_index]
 
     job_id = uuid.uuid4().hex[:10]
     with JOBS_LOCK:
@@ -1777,7 +1803,7 @@ def download_one_from_browse():
             "updated_at": datetime.now().isoformat(),
             "logs": ["ダウンロードジョブを作成しました。"],
         }
-    threading.Thread(target=_run_download_job, args=(job_id, api_key, [items[browse_index]]), daemon=True).start()
+    threading.Thread(target=_run_download_job, args=(job_id, api_key, [model]), daemon=True).start()
     return redirect(url_for("models", **_browse_redirect_params(browse_id, job=job_id)))
 
 

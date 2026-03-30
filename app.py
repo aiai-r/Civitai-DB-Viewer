@@ -14,6 +14,7 @@ import uuid
 import webbrowser
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for

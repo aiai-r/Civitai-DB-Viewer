@@ -309,8 +309,8 @@
         <strong>選択操作</strong>
         <span class="muted" id="browse-selected-count">0件選択中</span>
       </div>
-      <button type="submit" form="browse-selection-form">選択保存</button>
-      <button type="submit" form="browse-selection-form" formaction="{{ url_for('download_selected_from_browse') }}">選択DL</button>
+      <button type="submit" form="browse-selection-form">一括DB保存</button>
+      <button type="submit" form="browse-selection-form" formaction="{{ url_for('download_selected_from_browse') }}">一括モデルDL</button>
     </div>
 </section>
 {% endif %}
